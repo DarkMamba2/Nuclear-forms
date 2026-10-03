@@ -1,0 +1,2542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nuclear Forms — Reaction Laboratory</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          reactor: {
+            bg: '#070b14',
+            panel: '#0d1422',
+            panel2: '#111a2c',
+            line: '#1f2a44',
+          },
+          rad: {
+            green: '#4ade80',
+            cyan: '#22d3ee',
+            amber: '#fbbf24',
+            pink: '#f43f5e',
+          },
+        },
+        fontFamily: {
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --rad-green: #4ade80;
+    --rad-cyan: #22d3ee;
+    --rad-amber: #fbbf24;
+    --rad-pink: #f43f5e;
+  }
+
+  html, body, #root { height: 100%; }
+  body {
+    background: #070b14;
+    color: #e5e7eb;
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+
+  .reactor-floor {
+    background-image:
+      linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .glow-green { box-shadow: 0 0 24px rgba(74, 222, 128, 0.35), 0 0 2px rgba(74, 222, 128, 0.6); }
+  .glow-cyan  { box-shadow: 0 0 24px rgba(34, 211, 238, 0.35), 0 0 2px rgba(34, 211, 238, 0.6); }
+  .glow-amber { box-shadow: 0 0 24px rgba(251, 191, 36, 0.35), 0 0 2px rgba(251, 191, 36, 0.6); }
+  .glow-pink  { box-shadow: 0 0 24px rgba(244, 63, 94, 0.35), 0 0 2px rgba(244, 63, 94, 0.6); }
+  .text-glow-green { text-shadow: 0 0 12px rgba(74, 222, 128, 0.6); }
+  .text-glow-cyan  { text-shadow: 0 0 12px rgba(34, 211, 238, 0.6); }
+  .text-glow-amber { text-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
+
+  @keyframes orbit1 { to { transform: rotate(360deg); } }
+  @keyframes orbit2 { to { transform: rotate(-360deg); } }
+  @keyframes orbit3 { to { transform: rotate(360deg); } }
+  @keyframes nucleus-pulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.8)); }
+    50%      { transform: scale(1.08); filter: drop-shadow(0 0 16px rgba(74, 222, 128, 1)); }
+  }
+  .atom-orbit-1 { animation: orbit1 6s linear infinite; transform-origin: center; }
+  .atom-orbit-2 { animation: orbit2 8s linear infinite; transform-origin: center; }
+  .atom-orbit-3 { animation: orbit3 10s linear infinite; transform-origin: center; }
+  .atom-nucleus { animation: nucleus-pulse 2.4s ease-in-out infinite; transform-origin: center; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0); opacity: 0; }
+    10%  { opacity: 0.7; }
+    90%  { opacity: 0.7; }
+    to   { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+  }
+  .particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    border-radius: 50%;
+    background: var(--rad-cyan);
+    box-shadow: 0 0 6px var(--rad-cyan);
+    animation: drift linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes trefoil-spin { to { transform: rotate(360deg); } }
+  .trefoil-spin { animation: trefoil-spin 20s linear infinite; }
+
+  @keyframes geiger-click {
+    0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
+    100% { box-shadow: 0 0 0 14px rgba(74, 222, 128, 0); }
+  }
+  .geiger-click { animation: geiger-click 0.4s ease-out; }
+
+  @keyframes fission-burst {
+    0%   { transform: scale(0); opacity: 1; }
+    60%  { opacity: 1; }
+    100% { transform: scale(3); opacity: 0; }
+  }
+  .fission-burst { animation: fission-burst 0.8s ease-out forwards; }
+
+  @keyframes decay-glow {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.4); }
+  }
+  .decay-active { animation: decay-glow 1.6s ease-in-out infinite; }
+
+  .scanlines::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 2px,
+      rgba(0, 0, 0, 0.15) 3px, rgba(0, 0, 0, 0.15) 4px
+    );
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--rad-cyan);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0d1422; }
+  ::-webkit-scrollbar-thumb { background: #1f2a44; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a3a5c; }
+
+  .reactor-input {
+    background: #0b1220;
+    border: 1px solid #1f2a44;
+    color: #e5e7eb;
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  .reactor-input:focus {
+    border-color: var(--rad-cyan);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+    outline: none;
+  }
+
+  .btn-press { transition: transform 120ms ease-out, box-shadow 120ms ease-out; }
+  .btn-press:active { transform: scale(0.97); }
+
+  /* Modal backdrop */
+  .modal-backdrop {
+    background: rgba(7, 11, 20, 0.85);
+    backdrop-filter: blur(8px);
+  }
+
+  /* Custom audio player */
+  .reactor-audio {
+    width: 100%;
+    height: 40px;
+    filter: invert(1) hue-rotate(180deg) saturate(2) brightness(1.2);
+  }
+
+  /* File drop zone */
+  .drop-zone {
+    border: 2px dashed #1f2a44;
+    transition: border-color 200ms ease-out, background 200ms ease-out;
+  }
+  .drop-zone.drag-over {
+    border-color: var(--rad-cyan);
+    background: rgba(34, 211, 238, 0.05);
+  }
+
+  /* Sync indicator pulse */
+  @keyframes sync-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+  .sync-pulse { animation: sync-pulse 1.2s ease-in-out infinite; }
+
+  /* === ANIMATED REACTOR BACKGROUND === */
+
+/* Pulsing reactor cores in corners */
+@keyframes reactor-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50%      { transform: scale(1.15); opacity: 0.25; }
+}
+.reactor-core {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  animation: reactor-pulse 8s ease-in-out infinite;
+  z-index: 0;
+}
+.reactor-core-1 {
+  top: -150px; left: -150px;
+  background: radial-gradient(circle, rgba(74, 222, 128, 0.4), transparent 70%);
+  animation-delay: 0s;
+}
+.reactor-core-2 {
+  bottom: -150px; right: -150px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.35), transparent 70%);
+  animation-delay: -4s;
+}
+.reactor-core-3 {
+  top: 40%; right: -200px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.2), transparent 70%);
+  animation-delay: -2s;
+  width: 400px; height: 400px;
+}
+
+/* Sweeping scan beam */
+@keyframes scan-sweep {
+  0%   { transform: translateY(-100vh); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+.scan-beam {
+  position: fixed;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.1) 20%,
+    rgba(34, 211, 238, 0.6) 50%,
+    rgba(34, 211, 238, 0.1) 80%,
+    transparent 100%);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+  pointer-events: none;
+  animation: scan-sweep 12s linear infinite;
+  z-index: 0;
+}
+
+/* Floating radiation trefoils */
+@keyframes float-drift {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.15; }
+  90%  { opacity: 0.15; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+}
+.floating-trefoil {
+  position: fixed;
+  pointer-events: none;
+  color: var(--rad-amber);
+  opacity: 0;
+  animation: float-drift linear infinite;
+  z-index: 0;
+}
+
+/* Expanding energy rings from center */
+@keyframes energy-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+.energy-ring {
+  position: fixed;
+  top: 50%; left: 50%;
+  width: 400px; height: 400px;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: energy-ring 6s ease-out infinite;
+  z-index: 0;
+}
+.energy-ring-2 { animation-delay: -2s; border-color: rgba(34, 211, 238, 0.25); }
+.energy-ring-3 { animation-delay: -4s; border-color: rgba(251, 191, 36, 0.2); }
+
+/* Grid floor pulse */
+@keyframes grid-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+.reactor-floor-animated {
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: grid-pulse 6s ease-in-out infinite;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .reactor-core,
+  .scan-beam,
+  .floating-trefoil,
+  .energy-ring,
+  .reactor-floor-animated,
+  .particle {
+    animation: none !important;
+  }
+  .reactor-core { opacity: 0.1; }
+  .scan-beam { display: none; }
+  .floating-trefoil { display: none; }
+  .energy-ring { opacity: 0.1; }
+}
+</style>
+</head>
+<body class="reactor-floor-animated">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* -------------------------------------------------------------------------- */
+/*  STORAGE                                                                   */
+/* -------------------------------------------------------------------------- */
+const STORAGE_KEY = 'nuclear-forms:v2';
+const CONFIG_KEY  = 'nuclear-forms:config';
+// Hardcoded cloud config — set once, works everywhere
+const HARDCODED_CONFIG = {
+  token: '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',
+  repo: 'DarkMamba2/nuclear-forms-data',
+  branch: 'main',
+  path: 'nuclear-forms',
+};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { forms: {}, responses: {} };
+    const parsed = JSON.parse(raw);
+    return { forms: parsed.forms || {}, responses: parsed.responses || {} };
+  } catch {
+    return { forms: {}, responses: {} };
+  }
+}
+
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.warn('Failed to save state', e); }
+}
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function saveConfig(cfg) {
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+  catch (e) { console.warn('Failed to save config', e); }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  GITHUB SYNC                                                               */
+/* -------------------------------------------------------------------------- */
+const GitHubSync = {
+  apiBase: 'https://api.github.com',
+
+  headers(cfg) {
+    return {
+      'Authorization': `Bearer ${cfg.token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    };
+  },
+
+  filePath(cfg, formId) {
+    const prefix = (cfg.path || 'nuclear-forms').replace(/^\/|\/$/g, '');
+    return `${prefix}/${formId}.json`;
+  },
+
+  async testConnection(cfg) {
+    const r = await fetch(`${this.apiBase}/repos/${cfg.repo}`, {
+      headers: this.headers(cfg),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${r.status}`);
+    }
+    return await r.json();
+  },
+
+  async getFile(cfg, path) {
+    const r = await fetch(`${this.apiBase}/repos/${cfg.repo}/contents/${path}?ref=${cfg.branch || 'main'}`, {
+      headers: this.headers(cfg),
+    });
+    if (r.status === 404) return null;
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${r.status}`);
+    }
+    const data = await r.json();
+    const content = atob(data.content.replace(/\n/g, ''));
+    return { sha: data.sha, content: JSON.parse(content) };
+  },
+
+  async putFile(cfg, path, content, sha, message) {
+    const body = {
+      message: message || `Update ${path}`,
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
+      branch: cfg.branch || 'main',
+    };
+    if (sha) body.sha = sha;
+
+    const r = await fetch(`${this.apiBase}/repos/${cfg.repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: this.headers(cfg),
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${r.status}`);
+    }
+    return await r.json();
+  },
+
+  async listForms(cfg) {
+    const prefix = (cfg.path || 'nuclear-forms').replace(/^\/|\/$/g, '');
+    const r = await fetch(`${this.apiBase}/repos/${cfg.repo}/contents/${prefix}?ref=${cfg.branch || 'main'}`, {
+      headers: this.headers(cfg),
+    });
+    if (r.status === 404) return [];
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${r.status}`);
+    }
+    const files = await r.json();
+    return files.filter(f => f.name.endsWith('.json')).map(f => f.name.replace('.json', ''));
+  },
+
+  async loadForm(cfg, formId) {
+    const path = this.filePath(cfg, formId);
+    const data = await this.getFile(cfg, path);
+    if (!data) return null;
+    return data.content;
+  },
+
+  async saveForm(cfg, form, responses, existingSha) {
+    const path = this.filePath(cfg, form.id);
+    const payload = { form, responses: responses || [] };
+    const result = await this.putFile(
+      cfg, path, payload, existingSha,
+      `Update reaction ${form.title || form.id}`
+    );
+    return result.content.sha;
+  },
+
+  async appendResponse(cfg, formId, response) {
+    const path = this.filePath(cfg, formId);
+    // Fetch current, append, push (retry once on conflict)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const current = await this.getFile(cfg, path);
+      const payload = current
+        ? { form: current.content.form, responses: [...(current.content.responses || []), response] }
+        : { form: null, responses: [response] };
+      if (!payload.form) {
+        throw new Error('Form not found in cloud. Push the form first.');
+      }
+      try {
+        await this.putFile(
+          cfg, path, payload, current.sha,
+          `Log event for ${formId}`
+        );
+        return payload.responses;
+      } catch (e) {
+        if (attempt === 0 && /sha|update conflict/i.test(e.message)) continue;
+        throw e;
+      }
+    }
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/*  UTILITIES                                                                 */
+/* -------------------------------------------------------------------------- */
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+function useHashRoute() {
+  const [hash, setHash] = useState(() => window.location.hash || '#/');
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash || '#/');
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash;
+}
+
+function parseRoute(hash) {
+  const clean = hash.replace(/^#\/?/, '');
+  const parts = clean.split('/').filter(Boolean);
+  if (parts.length === 0) return { view: 'home' };
+  if (parts[0] === 'builder')   return { view: 'builder',   id: parts[1] || 'new' };
+  if (parts[0] === 'fill')      return { view: 'fill',      id: parts[1] };
+  if (parts[0] === 'responses') return { view: 'responses', id: parts[1] };
+  return { view: 'home' };
+}
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  url = url.trim();
+  
+  // Try URL parsing first
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+      if (u.searchParams.has('v')) return u.searchParams.get('v');
+      if (u.hostname === 'youtu.be') return u.pathname.slice(1).split(/[/?]/)[0];
+      const m = u.pathname.match(/\/(embed|shorts|v)\/([A-Za-z0-9_-]{11})/);
+      if (m) return m[2];
+    }
+  } catch {}
+  
+  // Regex fallback
+  const patterns = [
+    /(?:youtube\.com\/watch\?(?:[^&]+&)*v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/v\/)([A-Za-z0-9_-]{11})/,
+    /^([A-Za-z0-9_-]{11})$/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+/* -------------------------------------------------------------------------- */
+/*  ICONS                                                                     */
+/* -------------------------------------------------------------------------- */
+function RadiationTrefoil({ className = '', size = 24 }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="12" r="2.2" />
+      <path d="M12 2.5a9.5 9.5 0 0 1 8.22 4.75l-4.96 2.86A4 4 0 0 0 12 8a4 4 0 0 0-3.26 2.11L3.78 7.25A9.5 9.5 0 0 1 12 2.5Z" opacity="0.95"/>
+      <path d="M20.22 7.25a9.5 9.5 0 0 1-1.47 13l-4.96-2.86A4 4 0 0 0 16 12a4 4 0 0 0-1.21-2.39l4.96-2.86a9.5 9.5 0 0 1 .47.5Z" opacity="0.95"/>
+      <path d="M3.78 16.75a9.5 9.5 0 0 1 0-9.5l4.96 2.86A4 4 0 0 0 8 12a4 4 0 0 0 1.21 2.39l-4.96 2.86a9.5 9.5 0 0 1-.47-.5Z" opacity="0.95"/>
+    </svg>
+  );
+}
+
+function Icon({ name, className = '', size = 18, strokeWidth = 1.8 }) {
+  const common = {
+    width: size, height: size, viewBox: '0 0 24 24',
+    fill: 'none', stroke: 'currentColor',
+    strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round',
+    className, 'aria-hidden': 'true',
+  };
+  switch (name) {
+    case 'plus':     return <svg {...common}><path d="M12 5v14M5 12h14"/></svg>;
+    case 'trash':    return <svg {...common}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>;
+    case 'eye':      return <svg {...common}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z"/><circle cx="12" cy="12" r="3"/></svg>;
+    case 'chart':    return <svg {...common}><path d="M3 3v18h18"/><path d="M7 15l4-4 4 4 5-6"/></svg>;
+    case 'back':     return <svg {...common}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>;
+    case 'check':    return <svg {...common}><path d="M20 6L9 17l-5-5"/></svg>;
+    case 'link':     return <svg {...common}><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>;
+    case 'send':     return <svg {...common}><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7Z"/></svg>;
+    case 'alert':    return <svg {...common}><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>;
+    case 'cloud':    return <svg {...common}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10Z"/></svg>;
+    case 'cloud-off':return <svg {...common}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10Z"/><path d="M3 3l18 18"/></svg>;
+    case 'settings': return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>;
+    case 'upload':   return <svg {...common}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>;
+    case 'file':     return <svg {...common}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>;
+    case 'play':     return <svg {...common} fill="currentColor" stroke="none"><path d="M6 4l14 8-14 8V4z"/></svg>;
+    case 'x':        return <svg {...common}><path d="M18 6L6 18M6 6l12 12"/></svg>;
+    case 'refresh':  return <svg {...common}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
+    case 'download': return <svg {...common}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>;
+    default:         return null;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  ATOM LOGO                                                                 */
+/* -------------------------------------------------------------------------- */
+function AtomLogo({ size = 56 }) {
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <div
+        className="absolute rounded-full atom-nucleus"
+        style={{
+          width: size * 0.18, height: size * 0.18,
+          background: 'radial-gradient(circle at 35% 35%, #86efac, #22c55e 60%, #14532d)',
+          left: '50%', top: '50%',
+          transform: 'translate(-50%, -50%)',
+        }}
+      />
+      {[0, 60, 120].map((rot, i) => (
+        <div
+          key={i}
+          className={`absolute atom-orbit-${i + 1}`}
+          style={{
+            width: size, height: size * 0.42,
+            left: 0, top: '50%',
+            transform: `translateY(-50%) rotate(${rot}deg)`,
+            transformOrigin: 'center',
+          }}
+        >
+          <div className="absolute rounded-full" style={{ inset: 0, border: '1px solid rgba(34, 211, 238, 0.35)', borderRadius: '50%' }} />
+          <div
+            className="absolute rounded-full"
+            style={{
+              width: size * 0.09, height: size * 0.09,
+              background: '#22d3ee', boxShadow: '0 0 10px #22d3ee',
+              left: '50%', top: '50%',
+              transform: 'translate(-50%, -50%) translateX(' + (size * 0.5) + 'px)',
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  PARTICLE FIELD                                                            */
+/* -------------------------------------------------------------------------- */
+function ParticleField({ count = 28 }) {
+  const particles = useMemo(() => {
+    return Array.from({ length: count }).map(() => ({
+      id: Math.random(),
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      dx: (Math.random() - 0.5) * 200 + 'px',
+      dy: (Math.random() - 0.5) * 200 + 'px',
+      dur: 8 + Math.random() * 10,
+      delay: Math.random() * 10,
+      color: Math.random() > 0.7 ? '#4ade80' : '#22d3ee',
+    }));
+  }, [count]);
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      {particles.map(p => (
+        <span
+          key={p.id}
+          className="particle"
+          style={{
+            left: p.left + '%', top: p.top + '%',
+            background: p.color, boxShadow: `0 0 6px ${p.color}`,
+            '--dx': p.dx, '--dy': p.dy,
+            animationDuration: p.dur + 's',
+            animationDelay: '-' + p.delay + 's',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+/* -------------------------------------------------------------------------- */
+/*  REACTOR CORES (pulsing glows in corners)                                  */
+/* -------------------------------------------------------------------------- */
+function ReactorCores() {
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      <div className="reactor-core reactor-core-1" />
+      <div className="reactor-core reactor-core-2" />
+      <div className="reactor-core reactor-core-3" />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SCAN BEAM (horizontal sweep)                                              */
+/* -------------------------------------------------------------------------- */
+function ScanBeam() {
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      <div className="scan-beam" />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  FLOATING TREFOILS                                                         */
+/* -------------------------------------------------------------------------- */
+function FloatingTrefoils({ count = 6 }) {
+  const trefoils = useMemo(() => {
+    return Array.from({ length: count }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      size: 20 + Math.random() * 40,
+      dx: (Math.random() - 0.5) * 300 + 'px',
+      dy: (Math.random() - 0.5) * 300 + 'px',
+      rot: (Math.random() * 360 - 180) + 'deg',
+      dur: 20 + Math.random() * 15,
+      delay: Math.random() * 20,
+    }));
+  }, [count]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      {trefoils.map(t => (
+        <div
+          key={t.id}
+          className="floating-trefoil"
+          style={{
+            left: t.left + '%',
+            top: t.top + '%',
+            '--dx': t.dx,
+            '--dy': t.dy,
+            '--rot': t.rot,
+            animationDuration: t.dur + 's',
+            animationDelay: '-' + t.delay + 's',
+          }}
+        >
+          <RadiationTrefoil size={t.size} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  ENERGY RINGS (expanding from center)                                      */
+/* -------------------------------------------------------------------------- */
+function EnergyRings() {
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      <div className="energy-ring" />
+      <div className="energy-ring energy-ring-2" />
+      <div className="energy-ring energy-ring-3" />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  COMBINED ANIMATED BACKGROUND                                              */
+/* -------------------------------------------------------------------------- */
+function AnimatedBackground() {
+  return (
+    <>
+      <ReactorCores />
+      <ScanBeam />
+      <FloatingTrefoils count={6} />
+      <EnergyRings />
+      <ParticleField count={28} />
+    </>
+  );
+}
+/* -------------------------------------------------------------------------- */
+/*  BUTTONS                                                                   */
+/* -------------------------------------------------------------------------- */
+function GeigerButton({ children, onClick, variant = 'primary', className = '', type = 'button', disabled }) {
+  const [pulse, setPulse] = useState(false);
+  const handleClick = (e) => {
+    if (disabled) return;
+    setPulse(true);
+    setTimeout(() => setPulse(false), 400);
+    onClick && onClick(e);
+  };
+  const variants = {
+    primary: 'bg-rad-green/15 text-rad-green border-rad-green/40 hover:bg-rad-green/25 glow-green',
+    cyan:    'bg-rad-cyan/15 text-rad-cyan border-rad-cyan/40 hover:bg-rad-cyan/25 glow-cyan',
+    amber:   'bg-rad-amber/15 text-rad-amber border-rad-amber/40 hover:bg-rad-amber/25 glow-amber',
+    danger:  'bg-rad-pink/15 text-rad-pink border-rad-pink/40 hover:bg-rad-pink/25 glow-pink',
+    ghost:   'bg-transparent text-zinc-300 border-zinc-700 hover:bg-zinc-800/60',
+  };
+  return (
+    <button
+      type={type}
+      onClick={handleClick}
+      disabled={disabled}
+      className={
+        'btn-press relative inline-flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm ' +
+        'transition-colors disabled:opacity-40 disabled:cursor-not-allowed ' +
+        (variants[variant] || variants.primary) + ' ' +
+        (pulse ? 'geiger-click' : '') + ' ' +
+        className
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  DECAY-CHAIN PROGRESS                                                      */
+/* -------------------------------------------------------------------------- */
+function DecayChain({ current, total }) {
+  const pct = total === 0 ? 0 : Math.round((current / total) * 100);
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-1.5 font-mono text-[11px] uppercase tracking-wider">
+        <span className="text-zinc-400">Reaction Progress</span>
+        <span className="text-rad-green text-glow-green">{current}/{total} · {pct}%</span>
+      </div>
+      <div className="flex gap-1">
+        {Array.from({ length: total }).map((_, i) => {
+          const active = i < current;
+          return (
+            <div
+              key={i}
+              className={'h-1.5 flex-1 rounded-full transition-all ' + (active ? 'bg-rad-green decay-active' : 'bg-zinc-800')}
+              style={active ? { boxShadow: '0 0 8px rgba(74, 222, 128, 0.6)' } : {}}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SYNC INDICATOR                                                            */
+/* -------------------------------------------------------------------------- */
+function SyncIndicator({ status, configured, onOpenSettings, onPull, onPush, pulling, pushing }) {
+  const states = {
+    idle:      { color: 'bg-zinc-600',   label: 'LOCAL ONLY',       pulse: false },
+    syncing:   { color: 'bg-rad-amber',  label: 'SYNCING...',       pulse: true  },
+    synced:    { color: 'bg-rad-green',  label: 'CLOUD SYNCED',     pulse: false },
+    dirty:     { color: 'bg-rad-amber',  label: 'UNSAVED CHANGES',  pulse: true  },
+    error:     { color: 'bg-rad-pink',   label: 'SYNC ERROR',       pulse: false },
+  };
+  const s = states[status] || states.idle;
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-reactor-panel border border-reactor-line font-mono text-[11px]">
+        <span className={'w-1.5 h-1.5 rounded-full ' + s.color + (s.pulse ? ' sync-pulse' : '')} />
+        <span className="text-zinc-400">{s.label}</span>
+      </div>
+      {configured && (
+        <>
+          <button
+            onClick={onPull}
+            disabled={pulling || pushing}
+            className="p-2 rounded-md border border-reactor-line bg-reactor-panel text-zinc-400 hover:text-rad-cyan hover:border-rad-cyan/40 transition-colors disabled:opacity-40"
+            aria-label="Pull from cloud"
+            title="Pull from cloud"
+          >
+            <Icon name="download" size={14} />
+          </button>
+          <button
+            onClick={onPush}
+            disabled={pulling || pushing}
+            className="p-2 rounded-md border border-reactor-line bg-reactor-panel text-zinc-400 hover:text-rad-green hover:border-rad-green/40 transition-colors disabled:opacity-40"
+            aria-label="Push to cloud"
+            title="Push to cloud"
+          >
+            <Icon name="upload" size={14} />
+          </button>
+        </>
+      )}
+      <button
+        onClick={onOpenSettings}
+        className="p-2 rounded-md border border-reactor-line bg-reactor-panel text-zinc-400 hover:text-rad-amber hover:border-rad-amber/40 transition-colors"
+        aria-label="Cloud settings"
+        title="Cloud settings"
+      >
+        <Icon name="settings" size={14} />
+      </button>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SETTINGS MODAL                                                            */
+/* -------------------------------------------------------------------------- */
+function SettingsModal({ config, onSave, onClose }) {
+  const [form, setForm] = useState(() => {
+  // If hardcoded config exists, show it but don't allow editing
+  if (HARDCODED_CONFIG.token) {
+    return {
+      token: HARDCODED_CONFIG.token,
+      repo: HARDCODED_CONFIG.repo,
+      branch: HARDCODED_CONFIG.branch,
+      path: HARDCODED_CONFIG.path,
+    };
+  }
+  return {
+    token: config?.token || '',
+    repo:  config?.repo  || '',
+    branch: config?.branch || 'main',
+    path:  config?.path  || 'nuclear-forms',
+  };
+});
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const test = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      await GitHubSync.testConnection(form);
+      setTestResult({ ok: true, msg: 'Connection successful. Repository accessible.' });
+    } catch (e) {
+      setTestResult({ ok: false, msg: e.message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const save = () => {
+    if (!form.token || !form.repo) return;
+    onSave({
+      token: form.token.trim(),
+      repo: form.repo.trim(),
+      branch: form.branch.trim() || 'main',
+      path: form.path.trim() || 'nuclear-forms',
+    });
+    onClose();
+  };
+
+  const clear = () => {
+    if (confirm('Remove cloud configuration? Local data will be preserved.')) {
+      onSave(null);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-xl border border-reactor-line bg-reactor-panel shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-reactor-line">
+          <div className="flex items-center gap-3">
+            <Icon name="cloud" size={20} className="text-rad-amber" />
+            <h2 className="font-semibold text-zinc-100">Cloud Containment Config</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 p-1" aria-label="Close">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="rounded-lg border border-rad-amber/30 bg-rad-amber/5 p-3 text-xs text-zinc-300">
+            <div className="font-mono text-rad-amber mb-1">⚠ SECURITY NOTICE</div>
+            Your PAT is stored in this browser's localStorage only. Use a{' '}
+            <strong>fine-grained PAT</strong> scoped to a single repository with{' '}
+            <code className="text-rad-cyan">Contents: Read and write</code> permission.
+            Never use a classic PAT with broad access.
+          </div>
+
+          {HARDCODED_CONFIG.token ? (
+            <div className="rounded-lg border border-rad-green/30 bg-rad-green/5 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="check" size={16} className="text-rad-green" />
+                <div className="text-sm text-zinc-100 font-medium">Cloud sync configured</div>
+              </div>
+              <div className="text-xs text-zinc-400 font-mono space-y-1">
+                <div>Repository: <span className="text-rad-cyan">{HARDCODED_CONFIG.repo}</span></div>
+                <div>Branch: <span className="text-rad-cyan">{HARDCODED_CONFIG.branch}</span></div>
+                <div>Path: <span className="text-rad-cyan">{HARDCODED_CONFIG.path}</span></div>
+                <div className="pt-2 text-zinc-500">Config is hardcoded in the source. Auto-sync is active.</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Personal Access Token
+                </label>
+                <input
+                  type="password"
+                  value={form.token}
+                  onChange={e => update('token', e.target.value)}
+                  placeholder="github_pat_..."
+                  className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Repository (owner/name)
+                </label>
+                <input
+                  type="text"
+                  value={form.repo}
+                  onChange={e => update('repo', e.target.value)}
+                  placeholder="octocat/nuclear-forms-data"
+                  className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Branch
+                  </label>
+                  <input
+                    type="text"
+                    value={form.branch}
+                    onChange={e => update('branch', e.target.value)}
+                    placeholder="main"
+                    className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Path prefix
+                  </label>
+                  <input
+                    type="text"
+                    value={form.path}
+                    onChange={e => update('path', e.target.value)}
+                    placeholder="nuclear-forms"
+                    className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {testResult && (
+            <div className={'rounded-lg border p-3 text-xs font-mono ' +
+              (testResult.ok ? 'border-rad-green/40 bg-rad-green/5 text-rad-green'
+                             : 'border-rad-pink/40 bg-rad-pink/5 text-rad-pink')}>
+              {testResult.msg}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-reactor-line bg-reactor-bg/40">
+          <button
+            onClick={clear}
+            className="text-xs text-zinc-500 hover:text-rad-pink font-mono"
+          >
+            Remove config
+          </button>
+          {!HARDCODED_CONFIG.token && (
+            <div className="flex gap-2">
+              <GeigerButton variant="ghost" onClick={test} disabled={testing || !form.token || !form.repo}>
+                {testing ? 'Testing...' : 'Test connection'}
+              </GeigerButton>
+              <GeigerButton variant="primary" onClick={save} disabled={!form.token || !form.repo}>
+                <Icon name="check" size={14} /> Save
+              </GeigerButton>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  HEADER                                                                    */
+/* -------------------------------------------------------------------------- */
+function Header({ onHome, syncStatus, config, onOpenSettings, onPull, onPush, pulling, pushing }) {
+  return (
+    <header className="sticky top-0 z-40 backdrop-blur-md bg-reactor-bg/80 border-b border-reactor-line">
+      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+        <button onClick={onHome} className="flex items-center gap-3 group flex-shrink-0">
+          <AtomLogo size={40} />
+          <div className="text-left">
+            <div className="font-mono text-sm font-bold text-rad-green text-glow-green tracking-wider">
+              NUCLEAR FORMS
+            </div>
+            <div className="font-mono text-[10px] text-zinc-500 tracking-widest">
+              REACTION LABORATORY · v2.0
+            </div>
+          </div>
+        </button>
+        <SyncIndicator
+          status={syncStatus}
+          configured={!!config}
+          onOpenSettings={onOpenSettings}
+          onPull={onPull}
+          onPush={onPush}
+          pulling={pulling}
+          pushing={pushing}
+        />
+      </div>
+    </header>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  HOME                                                                      */
+/* -------------------------------------------------------------------------- */
+function Home({ forms, responses, onCreate, onOpen, onDelete, config, onPullAll }) {
+  const formList = Object.values(forms).sort((a, b) => b.createdAt - a.createdAt);
+  const [pulling, setPulling] = useState(false);
+
+  const pullAll = async () => {
+    if (!config) return;
+    setPulling(true);
+    try { await onPullAll({ silent: false }); }
+    finally { setPulling(false); }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-10">
+      <div className="relative overflow-hidden rounded-2xl border border-reactor-line bg-gradient-to-br from-reactor-panel to-reactor-panel2 p-8 mb-10 scanlines">
+        <div className="absolute -right-16 -top-16 opacity-20 trefoil-spin">
+          <RadiationTrefoil size={280} className="text-rad-amber" />
+        </div>
+        <div className="relative">
+          <div className="font-mono text-[11px] text-rad-amber tracking-widest mb-2">
+            ⚠ CONTAINMENT BREACH PROTOCOL
+          </div>
+          <h1 className="text-4xl font-bold text-zinc-100 mb-2">
+            Initiate a new <span className="text-rad-green text-glow-green">reaction</span>.
+          </h1>
+          <p className="text-zinc-400 max-w-xl">
+            Build question chains, collect data isotopes, and analyze decay patterns.
+            {config ? ' Cloud containment active — reactions sync across devices.' : ' Configure cloud containment in settings to sync across devices.'}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <GeigerButton variant="primary" onClick={onCreate}>
+              <Icon name="plus" /> Initiate Reaction
+            </GeigerButton>
+            {config && (
+              <GeigerButton variant="cyan" onClick={pullAll} disabled={pulling}>
+                <Icon name="download" size={14} /> {pulling ? 'Pulling...' : 'Pull from Cloud'}
+              </GeigerButton>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <StatCard label="Active Reactions" value={formList.length} color="green" />
+        <StatCard label="Detected Events" value={Object.values(responses).reduce((s, r) => s + r.length, 0)} color="cyan" />
+        <StatCard
+          label="Avg. Questions"
+          value={formList.length ? Math.round(formList.reduce((s, f) => s + f.questions.length, 0) / formList.length) : 0}
+          color="amber"
+        />
+        <StatCard label="Cloud Status" value={config ? 'ONLINE' : 'LOCAL'} color={config ? 'green' : 'pink'} />
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-mono text-sm text-zinc-400 tracking-widest uppercase">Fuel Rod Inventory</h2>
+        <div className="font-mono text-xs text-zinc-500">{formList.length} registered</div>
+      </div>
+
+      {formList.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {formList.map(f => (
+            <FormCard
+              key={f.id}
+              form={f}
+              responseCount={(responses[f.id] || []).length}
+              onOpen={() => onOpen(f.id)}
+              onDelete={() => onDelete(f.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, color }) {
+  const colorMap = {
+    green: 'text-rad-green border-rad-green/30',
+    cyan:  'text-rad-cyan border-rad-cyan/30',
+    amber: 'text-rad-amber border-rad-amber/30',
+    pink:  'text-rad-pink border-rad-pink/30',
+  };
+  return (
+    <div className={'rounded-xl border bg-reactor-panel p-4 ' + (colorMap[color] || '')}>
+      <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{label}</div>
+      <div className={'font-mono text-2xl font-bold ' + (colorMap[color] || '').split(' ')[0]}>{value}</div>
+    </div>
+  );
+}
+
+function FormCard({ form, responseCount, onOpen, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="group rounded-xl border border-reactor-line bg-reactor-panel hover:border-rad-cyan/40 transition-colors overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <h3 className="font-semibold text-zinc-100 line-clamp-1">{form.title || 'Untitled Reaction'}</h3>
+          <span className="font-mono text-[10px] text-zinc-500 whitespace-nowrap">
+            #{form.id.slice(0, 6).toUpperCase()}
+          </span>
+        </div>
+        {form.description && (
+          <p className="text-sm text-zinc-400 line-clamp-2 mb-4">{form.description}</p>
+        )}
+        <div className="flex items-center gap-4 font-mono text-[11px] text-zinc-500">
+          <span>{form.questions.length} questions</span>
+          <span>·</span>
+          <span className="text-rad-cyan">{responseCount} events</span>
+        </div>
+      </div>
+      <div className="border-t border-reactor-line px-5 py-3 flex items-center justify-between bg-reactor-bg/40">
+        <div className="flex gap-1">
+          <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/fill/' + form.id}>
+            <Icon name="eye" size={14} /> Fill
+          </GeigerButton>
+          <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/responses/' + form.id}>
+            <Icon name="chart" size={14} /> Data
+          </GeigerButton>
+        </div>
+        <div className="flex gap-1">
+          <GeigerButton variant="cyan" onClick={onOpen}>Edit</GeigerButton>
+          {confirming ? (
+            <GeigerButton variant="danger" onClick={() => { onDelete(); setConfirming(false); }}>
+              Confirm
+            </GeigerButton>
+          ) : (
+            <GeigerButton variant="ghost" onClick={() => setConfirming(true)}>
+              <Icon name="trash" size={14} />
+            </GeigerButton>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-xl border border-dashed border-reactor-line bg-reactor-panel/50 p-12 text-center">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-reactor-panel2 border border-reactor-line mb-4 trefoil-spin">
+        <RadiationTrefoil size={28} className="text-rad-amber" />
+      </div>
+      <h3 className="font-semibold text-zinc-200 mb-1">Vacuum state detected</h3>
+      <p className="text-sm text-zinc-500 mb-5">No reactions registered. Initiate your first form to begin data collection.</p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  QUESTION TYPES                                                            */
+/* -------------------------------------------------------------------------- */
+const QUESTION_TYPES = [
+  { value: 'short',   label: 'Short Answer',      icon: '—' },
+  { value: 'long',    label: 'Paragraph',         icon: '¶' },
+  { value: 'mc',      label: 'Multiple Choice',   icon: '◉' },
+  { value: 'checks',  label: 'Checkboxes',        icon: '☑' },
+  { value: 'drop',    label: 'Dropdown',          icon: '▾' },
+  { value: 'scale',   label: 'Linear Scale',      icon: '1→5' },
+  { value: 'date',    label: 'Date',              icon: '📅' },
+  { value: 'time',    label: 'Time',              icon: '⏰' },
+  { value: 'video',   label: 'Video (YouTube)',   icon: '▶' },
+  { value: 'audio',   label: 'Audio',             icon: '♪' },
+  { value: 'file',    label: 'File Upload',       icon: '📎' },
+  { value: 'section', label: 'Section Header',    icon: '§' },
+];
+
+/* -------------------------------------------------------------------------- */
+/*  FORM BUILDER                                                              */
+/* -------------------------------------------------------------------------- */
+function FormBuilder({ form, onChange, onSave, syncStatus, onPush }) {
+  const [copied, setCopied] = useState(false);
+
+  const updateForm = (patch) => onChange({ ...form, ...patch });
+
+  const addQuestion = (type) => {
+    const q = {
+      id: uid(),
+      type,
+      title: '',
+      required: false,
+      options: ['Option 1', 'Option 2'],
+      scaleMax: 5,
+      videoUrl: '',
+      audioUrl: '',
+      requireConfirm: false,
+      confirmLabel: 'I have watched/listened to this',
+      acceptTypes: '',
+      maxFileSizeMB: 2,
+    };
+    updateForm({ questions: [...form.questions, q] });
+  };
+
+  const updateQuestion = (id, patch) => {
+    updateForm({ questions: form.questions.map(q => q.id === id ? { ...q, ...patch } : q) });
+  };
+
+  const removeQuestion = (id) => updateForm({ questions: form.questions.filter(q => q.id !== id) });
+
+  const moveQuestion = (id, dir) => {
+    const idx = form.questions.findIndex(q => q.id === id);
+    if (idx < 0) return;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= form.questions.length) return;
+    const qs = [...form.questions];
+    [qs[idx], qs[newIdx]] = [qs[newIdx], qs[idx]];
+    updateForm({ questions: qs });
+  };
+
+  const copyLink = () => {
+    const url = window.location.origin + window.location.pathname + '#/fill/' + form.id;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/'}>
+          <Icon name="back" /> Back to reactor
+        </GeigerButton>
+        <div className="flex gap-2 flex-wrap">
+          <GeigerButton variant="ghost" onClick={copyLink}>
+            <Icon name={copied ? 'check' : 'link'} size={14} />
+            {copied ? 'Copied!' : 'Copy Link'}
+          </GeigerButton>
+          <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/fill/' + form.id}>
+            <Icon name="eye" size={14} /> Preview
+          </GeigerButton>
+          <GeigerButton variant="cyan" onClick={onSave}>
+            <Icon name="check" size={14} /> Save Local
+          </GeigerButton>
+          {syncStatus !== 'idle' && syncStatus !== 'syncing' && (
+            <GeigerButton variant="primary" onClick={onPush}>
+              <Icon name="upload" size={14} /> Push to Cloud
+            </GeigerButton>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-reactor-line bg-reactor-panel p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <AtomLogo size={48} />
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Untitled Reaction"
+              value={form.title}
+              onChange={(e) => updateForm({ title: e.target.value })}
+              className="w-full bg-transparent text-2xl font-bold text-zinc-100 placeholder:text-zinc-600 focus:outline-none mb-2"
+            />
+            <textarea
+              placeholder="Describe the parameters of this experiment..."
+              value={form.description}
+              onChange={(e) => updateForm({ description: e.target.value })}
+              rows={2}
+              className="w-full bg-transparent text-sm text-zinc-400 placeholder:text-zinc-600 focus:outline-none resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 mb-6">
+        {form.questions.map((q, i) => (
+          <QuestionEditor
+            key={q.id}
+            question={q}
+            index={i}
+            total={form.questions.length}
+            onChange={(patch) => updateQuestion(q.id, patch)}
+            onRemove={() => removeQuestion(q.id)}
+            onMove={(dir) => moveQuestion(q.id, dir)}
+          />
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-dashed border-reactor-line bg-reactor-panel/40 p-4">
+        <div className="font-mono text-[11px] text-zinc-500 uppercase tracking-widest mb-3">Insert Fuel Rod</div>
+        <div className="flex flex-wrap gap-2">
+          {QUESTION_TYPES.map(t => (
+            <GeigerButton
+              key={t.value}
+              variant="ghost"
+              onClick={() => addQuestion(t.value)}
+              className="font-mono text-xs"
+            >
+              <span className="text-rad-cyan">{t.icon}</span>
+              {t.label}
+            </GeigerButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuestionEditor({ question, index, total, onChange, onRemove, onMove }) {
+  const q = question;
+  const update = (patch) => onChange(patch);
+
+  const updateOption = (i, val) => {
+    const opts = [...q.options];
+    opts[i] = val;
+    update({ options: opts });
+  };
+  const addOption = () => update({ options: [...q.options, 'Option ' + (q.options.length + 1)] });
+  const removeOption = (i) => update({ options: q.options.filter((_, idx) => idx !== i) });
+
+  const isSection = q.type === 'section';
+  const isMedia   = q.type === 'video' || q.type === 'audio';
+
+  return (
+    <div className="rounded-xl border border-reactor-line bg-reactor-panel hover:border-rad-cyan/30 transition-colors">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-reactor-line bg-reactor-bg/40 flex-wrap">
+        <div className="flex flex-col gap-0.5">
+          <button onClick={() => onMove(-1)} disabled={index === 0}
+            className="text-zinc-500 hover:text-rad-cyan disabled:opacity-30 text-[10px] leading-none" aria-label="Move up">▲</button>
+          <button onClick={() => onMove(1)} disabled={index === total - 1}
+            className="text-zinc-500 hover:text-rad-cyan disabled:opacity-30 text-[10px] leading-none" aria-label="Move down">▼</button>
+        </div>
+        <div className="font-mono text-[11px] text-zinc-500">
+          ROD #{String(index + 1).padStart(2, '0')}
+        </div>
+        <select
+          value={q.type}
+          onChange={(e) => update({ type: e.target.value })}
+          className="reactor-input rounded px-2 py-1 text-xs font-mono ml-auto"
+        >
+          {QUESTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        {!isSection && (
+          <label className="flex items-center gap-1.5 text-xs text-zinc-400 ml-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={q.required}
+              onChange={(e) => update({ required: e.target.checked })}
+              className="accent-rad-pink"
+            />
+            <span className={q.required ? 'text-rad-pink' : ''}>Required</span>
+          </label>
+        )}
+        <button onClick={onRemove} className="text-zinc-500 hover:text-rad-pink p-1" aria-label="Delete question">
+          <Icon name="trash" size={14} />
+        </button>
+      </div>
+
+      <div className="p-4">
+        <input
+          type="text"
+          placeholder={isSection ? 'Section title...' : 'Question title...'}
+          value={q.title}
+          onChange={(e) => update({ title: e.target.value })}
+          className={'w-full bg-transparent placeholder:text-zinc-600 focus:outline-none mb-3 ' +
+            (isSection ? 'text-xl font-bold text-rad-amber' : 'text-base text-zinc-100')}
+        />
+
+        {isSection && (
+          <textarea
+            placeholder="Optional section description..."
+            value={q.description || ''}
+            onChange={(e) => update({ description: e.target.value })}
+            rows={2}
+            className="reactor-input w-full rounded px-3 py-2 text-sm resize-none"
+          />
+        )}
+
+        {(q.type === 'mc' || q.type === 'checks' || q.type === 'drop') && (
+          <div className="space-y-2">
+            {q.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className={'w-4 h-4 flex-shrink-0 ' +
+                  (q.type === 'checks' ? 'rounded border border-rad-cyan/50' : 'rounded-full border border-rad-cyan/50')} />
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={(e) => updateOption(i, e.target.value)}
+                  className="reactor-input flex-1 rounded px-3 py-1.5 text-sm"
+                />
+                <button onClick={() => removeOption(i)} className="text-zinc-500 hover:text-rad-pink p-1" aria-label="Remove option">
+                  <Icon name="trash" size={12} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addOption} className="text-xs text-rad-cyan hover:text-rad-green font-mono">
+              + Add isotope
+            </button>
+          </div>
+        )}
+
+        {q.type === 'scale' && (
+          <div className="flex items-center gap-3 font-mono text-sm">
+            <span className="text-zinc-500">Range: 1 →</span>
+            <input
+              type="number"
+              min={2} max={10}
+              value={q.scaleMax}
+              onChange={(e) => update({ scaleMax: Math.max(2, Math.min(10, parseInt(e.target.value) || 5)) })}
+              className="reactor-input rounded px-3 py-1 w-20 text-center"
+            />
+          </div>
+        )}
+
+        {q.type === 'video' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                YouTube URL or Video ID
+              </label>
+              <input
+                type="text"
+                value={q.videoUrl || ''}
+                onChange={(e) => update({ videoUrl: e.target.value })}
+                placeholder="https://youtube.com/watch?v=... or dQw4w9WgXcQ"
+                className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+              />
+              {q.videoUrl && !extractYouTubeId(q.videoUrl) && (
+                <div className="mt-1.5 text-xs text-rad-pink font-mono">⚠ Could not parse YouTube ID from this URL</div>
+              )}
+            </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={q.requireConfirm || false}
+                onChange={(e) => update({ requireConfirm: e.target.checked })}
+                className="accent-rad-cyan"
+              />
+              Require confirmation that respondent watched the video
+            </label>
+            {q.requireConfirm && (
+              <input
+                type="text"
+                value={q.confirmLabel || ''}
+                onChange={(e) => update({ confirmLabel: e.target.value })}
+                placeholder="I have watched this video"
+                className="reactor-input w-full rounded px-3 py-2 text-sm"
+              />
+            )}
+          </div>
+        )}
+
+        {q.type === 'audio' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">
+                Audio source (URL or upload below)
+              </label>
+              <input
+                type="text"
+                value={q.audioUrl || ''}
+                onChange={(e) => update({ audioUrl: e.target.value })}
+                placeholder="https://example.com/audio.mp3"
+                className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={q.requireConfirm || false}
+                onChange={(e) => update({ requireConfirm: e.target.checked })}
+                className="accent-rad-cyan"
+              />
+              Require confirmation that respondent listened
+            </label>
+          </div>
+        )}
+
+        {q.type === 'file' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                Accepted file types (optional, comma-separated MIME or extensions)
+              </label>
+              <input
+                type="text"
+                value={q.acceptTypes || ''}
+                onChange={(e) => update({ acceptTypes: e.target.value })}
+                placeholder=".pdf,.png,image/*"
+                className="reactor-input w-full rounded px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                Max file size (MB)
+              </label>
+              <input
+                type="number"
+                min={0.1} max={5} step={0.1}
+                value={q.maxFileSizeMB || 2}
+                onChange={(e) => update({ maxFileSizeMB: Math.max(0.1, Math.min(5, parseFloat(e.target.value) || 2)) })}
+                className="reactor-input rounded px-3 py-2 text-sm w-24"
+              />
+              <span className="ml-2 text-xs text-zinc-500">
+                Larger files may exceed cloud sync limits
+              </span>
+            </div>
+          </div>
+        )}
+
+        {q.type === 'short' && (
+          <div className="reactor-input rounded px-3 py-2 text-sm text-zinc-600">Short text input</div>
+        )}
+        {q.type === 'long' && (
+          <div className="reactor-input rounded px-3 py-2 text-sm text-zinc-600 min-h-[60px]">Long text input</div>
+        )}
+        {q.type === 'date' && (
+          <div className="reactor-input rounded px-3 py-2 text-sm text-zinc-600 inline-block">yyyy-mm-dd</div>
+        )}
+        {q.type === 'time' && (
+          <div className="reactor-input rounded px-3 py-2 text-sm text-zinc-600 inline-block">hh:mm</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  FORM FILLER                                                               */
+/* -------------------------------------------------------------------------- */
+function FormFiller({ form, responses, onSubmit, config }) {
+  const [answers, setAnswers] = useState({});
+  const [errors, setErrors] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [burst, setBurst] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const answerableQuestions = form.questions.filter(q => q.type !== 'section');
+  const answeredCount = answerableQuestions.filter(q => {
+    const v = answers[q.id];
+    if (v === undefined || v === null || v === '') return false;
+    if (Array.isArray(v) && v.length === 0) return false;
+    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      // file type: check if file data exists
+      return !!v.data;
+    }
+    return true;
+  }).length;
+
+  const validate = () => {
+    const errs = {};
+    form.questions.forEach(q => {
+      if (q.type === 'section') return;
+      if (!q.required && !(q.requireConfirm && (q.type === 'video' || q.type === 'audio'))) return;
+
+      const v = answers[q.id];
+      const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+      const fileEmpty = typeof v === 'object' && v !== null && !Array.isArray(v) && !v.data;
+
+      if (q.required && (empty || fileEmpty)) {
+        errs[q.id] = 'This field is required';
+      }
+      if (q.requireConfirm && (q.type === 'video' || q.type === 'audio') && !answers[q.id + '_confirmed']) {
+        errs[q.id + '_confirmed'] = 'Please confirm before continuing';
+      }
+    });
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setBurst(true);
+    setSubmitting(true);
+    try {
+      await onSubmit(answers);
+      setSubmitted(true);
+    } finally {
+      setBurst(false);
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+        <div className="relative inline-block mb-6">
+          <div className="absolute inset-0 rounded-full bg-rad-green/20 fission-burst" />
+          <div className="relative inline-flex items-center justify-center w-24 h-24 rounded-full border-2 border-rad-green glow-green">
+            <Icon name="check" size={48} className="text-rad-green" strokeWidth={2.5} />
+          </div>
+        </div>
+        <h2 className="text-3xl font-bold text-zinc-100 mb-2">Reaction Complete</h2>
+        <p className="text-zinc-400 mb-6">Your data isotopes have been successfully captured and logged.</p>
+        <div className="font-mono text-xs text-zinc-500 mb-8">
+          EVENT LOGGED · {(responses[form.id] || []).length} TOTAL DETECTIONS
+        </div>
+        <GeigerButton variant="primary" onClick={() => window.location.hash = '#/'}>
+          Return to reactor
+        </GeigerButton>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-6 py-8">
+      <div className="mb-6">
+        <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/'}>
+          <Icon name="back" /> Back
+        </GeigerButton>
+      </div>
+
+      <div className="rounded-xl border border-reactor-line bg-reactor-panel p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <AtomLogo size={40} />
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-zinc-100 mb-1">{form.title || 'Untitled Reaction'}</h1>
+            {form.description && <p className="text-sm text-zinc-400">{form.description}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <DecayChain current={answeredCount} total={answerableQuestions.length} />
+      </div>
+
+      <div className="space-y-4 mb-6">
+        {form.questions.map((q, i) => (
+          <QuestionRenderer
+            key={q.id}
+            question={q}
+            index={i}
+            value={answers[q.id]}
+            confirmed={answers[q.id + '_confirmed']}
+            error={errors[q.id]}
+            confirmError={errors[q.id + '_confirmed']}
+            onChange={(v) => setAnswers({ ...answers, [q.id]: v })}
+            onConfirm={(v) => setAnswers({ ...answers, [q.id + '_confirmed']: v })}
+          />
+        ))}
+      </div>
+
+      <div className="flex justify-end gap-3 sticky bottom-4 bg-reactor-bg/80 backdrop-blur rounded-lg border border-reactor-line p-3">
+        <GeigerButton variant="primary" type="submit" disabled={submitting}>
+          <Icon name="send" size={14} /> {submitting ? 'Transmitting...' : 'Submit Reaction'}
+          {burst && <span className="absolute inset-0 rounded-lg fission-burst bg-rad-green/30 pointer-events-none" />}
+        </GeigerButton>
+      </div>
+    </form>
+  );
+}
+
+function QuestionRenderer({ question, index, value, confirmed, error, confirmError, onChange, onConfirm }) {
+  const q = question;
+
+  if (q.type === 'section') {
+    return (
+      <div className="rounded-xl border-l-4 border-rad-amber bg-reactor-panel/40 p-5">
+        <div className="font-mono text-[11px] text-rad-amber tracking-widest mb-1">
+          SECTION {String(index + 1).padStart(2, '0')}
+        </div>
+        <h2 className="text-xl font-bold text-zinc-100 mb-1">{q.title || 'Untitled section'}</h2>
+        {q.description && <p className="text-sm text-zinc-400">{q.description}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={'rounded-xl border bg-reactor-panel p-5 transition-colors ' + (error ? 'border-rad-pink/60' : 'border-reactor-line')}>
+      <div className="flex items-start gap-3 mb-3">
+        <div className="font-mono text-[11px] text-zinc-500 mt-1">{String(index + 1).padStart(2, '0')}</div>
+        <div className="flex-1">
+          <div className="text-zinc-100 font-medium mb-0.5">
+            {q.title || <span className="text-zinc-600 italic">Untitled question</span>}
+            {q.required && <span className="text-rad-pink ml-1">*</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className="pl-8 space-y-3">
+        {q.type === 'short' && (
+          <input type="text" value={value || ''} onChange={(e) => onChange(e.target.value)}
+            className="reactor-input w-full rounded px-3 py-2 text-sm" />
+        )}
+        {q.type === 'long' && (
+          <textarea value={value || ''} onChange={(e) => onChange(e.target.value)} rows={3}
+            className="reactor-input w-full rounded px-3 py-2 text-sm resize-none" />
+        )}
+        {q.type === 'mc' && (
+          <div className="space-y-2">
+            {q.options.map((opt, i) => (
+              <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                <span className={'w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ' +
+                  (value === opt ? 'border-rad-green bg-rad-green/30' : 'border-zinc-600 group-hover:border-rad-cyan')}>
+                  {value === opt && <span className="block w-full h-full rounded-full bg-rad-green scale-50" />}
+                </span>
+                <input type="radio" name={q.id} checked={value === opt} onChange={() => onChange(opt)} className="sr-only" />
+                <span className="text-sm text-zinc-300">{opt}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {q.type === 'checks' && (
+          <div className="space-y-2">
+            {q.options.map((opt, i) => {
+              const arr = Array.isArray(value) ? value : [];
+              const checked = arr.includes(opt);
+              return (
+                <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                  <span className={'w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ' +
+                    (checked ? 'border-rad-green bg-rad-green/30' : 'border-zinc-600 group-hover:border-rad-cyan')}>
+                    {checked && <Icon name="check" size={10} className="text-rad-green" strokeWidth={3} />}
+                  </span>
+                  <input type="checkbox" checked={checked}
+                    onChange={() => onChange(checked ? arr.filter(x => x !== opt) : [...arr, opt])}
+                    className="sr-only" />
+                  <span className="text-sm text-zinc-300">{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        {q.type === 'drop' && (
+          <select value={value || ''} onChange={(e) => onChange(e.target.value)}
+            className="reactor-input w-full rounded px-3 py-2 text-sm">
+            <option value="">Choose an isotope...</option>
+            {q.options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+          </select>
+        )}
+        {q.type === 'scale' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {Array.from({ length: q.scaleMax }).map((_, i) => {
+              const n = i + 1;
+              const active = value === n;
+              return (
+                <button key={i} type="button" onClick={() => onChange(n)}
+                  className={'w-9 h-9 rounded border font-mono text-sm transition-all ' +
+                    (active ? 'border-rad-green bg-rad-green/20 text-rad-green glow-green'
+                            : 'border-zinc-700 text-zinc-400 hover:border-rad-cyan hover:text-rad-cyan')}>
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {q.type === 'date' && (
+          <input type="date" value={value || ''} onChange={(e) => onChange(e.target.value)}
+            className="reactor-input rounded px-3 py-2 text-sm" />
+        )}
+        {q.type === 'time' && (
+          <input type="time" value={value || ''} onChange={(e) => onChange(e.target.value)}
+            className="reactor-input rounded px-3 py-2 text-sm" />
+        )}
+
+        {q.type === 'video' && (
+          <VideoPlayer question={q} value={value} confirmed={confirmed}
+            confirmError={confirmError} onChange={onChange} onConfirm={onConfirm} />
+        )}
+        {q.type === 'audio' && (
+          <AudioPlayer question={q} value={value} confirmed={confirmed}
+            confirmError={confirmError} onChange={onChange} onConfirm={onConfirm} />
+        )}
+        {q.type === 'file' && (
+          <FileUploader question={q} value={value} error={error} onChange={onChange} />
+        )}
+
+        {error && (
+          <div className="flex items-center gap-1.5 text-xs text-rad-pink font-mono">
+            <Icon name="alert" size={12} /> {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  VIDEO PLAYER                                                              */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*  YOUTUBE API LOADER (once, globally)                                       */
+/* -------------------------------------------------------------------------- */
+let ytApiPromise = null;
+
+
+/* -------------------------------------------------------------------------- */
+/*  VIDEO PLAYER (with error 153 fallback)                                    */
+/* -------------------------------------------------------------------------- */
+function VideoPlayer({ question, value, confirmed, confirmError, onChange, onConfirm }) {
+  const videoId = extractYouTubeId(question.videoUrl);
+  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+  const watchUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : null;
+
+  return (
+    <div className="space-y-3">
+      {videoId ? (
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block relative w-full rounded-lg overflow-hidden border border-reactor-line bg-black hover:border-rad-cyan/60 transition-colors"
+          style={{ aspectRatio: '16/9' }}
+        >
+          <img
+            src={thumbUrl}
+            alt={question.title || 'YouTube video thumbnail'}
+            className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+          {/* Play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-rad-pink/90 flex items-center justify-center group-hover:scale-110 transition-transform glow-pink">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+          {/* YouTube badge */}
+          <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 font-mono text-[10px] text-zinc-300">
+            ▶ YouTube
+          </div>
+          {/* Video ID label */}
+          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/70 font-mono text-[10px] text-zinc-400">
+            {videoId}
+          </div>
+        </a>
+      ) : (
+        <div className="rounded-lg border border-dashed border-reactor-line bg-reactor-bg/40 p-6 text-center">
+          <Icon name="play" size={24} className="text-zinc-600 mx-auto mb-2" />
+          <div className="text-sm text-zinc-500 mb-2">
+            {question.videoUrl ? 'Invalid YouTube URL' : 'No YouTube URL configured'}
+          </div>
+          <div className="text-xs text-zinc-600 font-mono">
+            Use: youtube.com/watch?v=ID, youtu.be/ID, or bare 11-char ID
+          </div>
+        </div>
+      )}
+
+      {videoId && (
+        <div className="text-xs text-zinc-500 font-mono">
+          Click the thumbnail to open on YouTube
+        </div>
+      )}
+
+      {question.requireConfirm && (
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <span className={'w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ' +
+            (confirmed ? 'border-rad-green bg-rad-green/30' : 'border-zinc-600 group-hover:border-rad-cyan')}>
+            {confirmed && <Icon name="check" size={10} className="text-rad-green" strokeWidth={3} />}
+          </span>
+          <input type="checkbox" checked={!!confirmed} onChange={(e) => onConfirm(e.target.checked)} className="sr-only" />
+          <span className="text-sm text-zinc-300">{question.confirmLabel || 'I have watched this video'}</span>
+        </label>
+      )}
+
+      {confirmError && (
+        <div className="flex items-center gap-1.5 text-xs text-rad-pink font-mono">
+          <Icon name="alert" size={12} /> {confirmError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  AUDIO PLAYER                                                              */
+/* -------------------------------------------------------------------------- */
+function AudioPlayer({ question, value, confirmed, confirmError, onChange, onConfirm }) {
+  const src = question.audioUrl;
+  return (
+    <div className="space-y-3">
+      {src ? (
+        <div className="rounded-lg border border-reactor-line bg-reactor-bg/40 p-3">
+          <audio controls src={src} className="reactor-audio" preload="metadata">
+            Your browser does not support audio playback.
+          </audio>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-reactor-line bg-reactor-bg/40 p-6 text-center">
+          <Icon name="play" size={24} className="text-zinc-600 mx-auto mb-2" />
+          <div className="text-sm text-zinc-500">No audio source configured</div>
+        </div>
+      )}
+      {question.requireConfirm && (
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <span className={'w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ' +
+            (confirmed ? 'border-rad-green bg-rad-green/30' : 'border-zinc-600 group-hover:border-rad-cyan')}>
+            {confirmed && <Icon name="check" size={10} className="text-rad-green" strokeWidth={3} />}
+          </span>
+          <input type="checkbox" checked={!!confirmed} onChange={(e) => onConfirm(e.target.checked)} className="sr-only" />
+          <span className="text-sm text-zinc-300">{question.confirmLabel || 'I have listened to this audio'}</span>
+        </label>
+      )}
+      {confirmError && (
+        <div className="flex items-center gap-1.5 text-xs text-rad-pink font-mono">
+          <Icon name="alert" size={12} /> {confirmError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  FILE UPLOADER                                                             */
+/* -------------------------------------------------------------------------- */
+function FileUploader({ question, value, error, onChange }) {
+  const inputRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [localError, setLocalError] = useState('');
+
+  const maxBytes = (question.maxFileSizeMB || 2) * 1024 * 1024;
+
+  const handleFile = (file) => {
+    setLocalError('');
+    if (!file) return;
+    if (file.size > maxBytes) {
+      setLocalError(`File exceeds ${question.maxFileSizeMB}MB limit`);
+      return;
+    }
+    if (question.acceptTypes) {
+      const allowed = question.acceptTypes.split(',').map(s => s.trim().toLowerCase());
+      const ok = allowed.some(a => {
+        if (a.startsWith('.')) return file.name.toLowerCase().endsWith(a);
+        if (a.endsWith('/*')) return file.type.startsWith(a.replace('/*', '/'));
+        return file.type.toLowerCase() === a;
+      });
+      if (!ok) {
+        setLocalError('File type not accepted');
+        return;
+      }
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      onChange({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        data: reader.result,
+      });
+    };
+    reader.onerror = () => setLocalError('Failed to read file');
+    reader.readAsDataURL(file);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  };
+
+  const file = value && value.data ? value : null;
+
+  return (
+    <div className="space-y-2">
+      {!file ? (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className={'drop-zone rounded-lg p-6 text-center cursor-pointer ' + (dragOver ? 'drag-over' : '')}
+        >
+          <Icon name="upload" size={24} className="text-rad-cyan mx-auto mb-2" />
+          <div className="text-sm text-zinc-300 mb-1">Drop file here or click to browse</div>
+          <div className="text-xs text-zinc-500 font-mono">
+            Max {question.maxFileSizeMB}MB
+            {question.acceptTypes && <> · {question.acceptTypes}</>}
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={question.acceptTypes || undefined}
+            onChange={(e) => handleFile(e.target.files[0])}
+            className="hidden"
+          />
+        </div>
+      ) : (
+        <div className="rounded-lg border border-rad-green/40 bg-rad-green/5 p-3 flex items-center gap-3">
+          <Icon name="file" size={20} className="text-rad-green flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-zinc-100 truncate">{file.name}</div>
+            <div className="text-xs text-zinc-500 font-mono">{formatBytes(file.size)} · {file.type || 'unknown type'}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-zinc-500 hover:text-rad-pink p-1"
+            aria-label="Remove file"
+          >
+            <Icon name="trash" size={14} />
+          </button>
+        </div>
+      )}
+      {(localError || error) && (
+        <div className="flex items-center gap-1.5 text-xs text-rad-pink font-mono">
+          <Icon name="alert" size={12} /> {localError || error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  RESPONSES VIEW                                                            */
+/* -------------------------------------------------------------------------- */
+function ResponsesView({ form, responses }) {
+  const list = responses[form.id] || [];
+  const [exporting, setExporting] = useState(false);
+
+  const exportCSV = () => {
+    const headers = ['submittedAt', ...form.questions.filter(q => q.type !== 'section').map(q => q.title || q.id)];
+    const rows = list.map(r => {
+      return [
+        new Date(r.submittedAt).toISOString(),
+        ...form.questions.filter(q => q.type !== 'section').map(q => {
+          const v = r.answers[q.id];
+          if (v === undefined || v === null) return '';
+          if (typeof v === 'object' && v.data) return `[file: ${v.name}]`;
+          if (Array.isArray(v)) return v.join('; ');
+          return String(v);
+        }),
+      ];
+    });
+    const csv = [headers, ...rows].map(row =>
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${form.title || 'responses'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/'}>
+          <Icon name="back" /> Back
+        </GeigerButton>
+        <div className="flex gap-2">
+          <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/builder/' + form.id}>Edit form</GeigerButton>
+          <GeigerButton variant="ghost" onClick={() => window.location.hash = '#/fill/' + form.id}>
+            <Icon name="eye" size={14} /> Fill
+          </GeigerButton>
+          {list.length > 0 && (
+            <GeigerButton variant="cyan" onClick={exportCSV}>
+              <Icon name="download" size={14} /> Export CSV
+            </GeigerButton>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-reactor-line bg-reactor-panel p-6 mb-6">
+        <div className="font-mono text-[11px] text-zinc-500 tracking-widest uppercase mb-1">
+          Detection Log · #{form.id.slice(0, 6).toUpperCase()}
+        </div>
+        <h1 className="text-2xl font-bold text-zinc-100">{form.title || 'Untitled Reaction'}</h1>
+        <div className="mt-3 flex items-center gap-4 font-mono text-xs">
+          <span className="text-rad-cyan">{list.length} events detected</span>
+          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-500">{form.questions.filter(q => q.type !== 'section').length} sensors active</span>
+        </div>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-reactor-line bg-reactor-panel/40 p-12 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-reactor-panel2 border border-reactor-line mb-3">
+            <Icon name="chart" size={22} className="text-zinc-500" />
+          </div>
+          <h3 className="font-semibold text-zinc-200 mb-1">No events detected</h3>
+          <p className="text-sm text-zinc-500 mb-4">Share the reaction link to begin collecting data isotopes.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {form.questions.filter(q => q.type !== 'section').map((q, i) => (
+            <QuestionSummary key={q.id} question={q} index={i} responses={list} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionSummary({ question, index, responses }) {
+  const values = responses.map(r => r.answers[question.id]).filter(v => v !== undefined && v !== null && v !== '');
+  const q = question;
+
+  let summary = null;
+  if (q.type === 'mc' || q.type === 'drop') {
+    const counts = {};
+    q.options.forEach(o => counts[o] = 0);
+    values.forEach(v => { if (counts[v] !== undefined) counts[v]++; });
+    const max = Math.max(1, ...Object.values(counts));
+    summary = (
+      <div className="space-y-1.5">
+        {q.options.map((opt, i) => {
+          const c = counts[opt] || 0;
+          const pct = values.length ? Math.round((c / values.length) * 100) : 0;
+          return (
+            <div key={i}>
+              <div className="flex justify-between text-xs mb-0.5">
+                <span className="text-zinc-300">{opt}</span>
+                <span className="font-mono text-zinc-500">{c} · {pct}%</span>
+              </div>
+              <div className="h-2 bg-reactor-bg rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-rad-green to-rad-cyan transition-all"
+                  style={{ width: (c / max) * 100 + '%', boxShadow: '0 0 8px rgba(74, 222, 128, 0.4)' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else if (q.type === 'checks') {
+    const counts = {};
+    q.options.forEach(o => counts[o] = 0);
+    values.forEach(arr => { if (Array.isArray(arr)) arr.forEach(v => { if (counts[v] !== undefined) counts[v]++; }); });
+    const max = Math.max(1, ...Object.values(counts));
+    summary = (
+      <div className="space-y-1.5">
+        {q.options.map((opt, i) => {
+          const c = counts[opt] || 0;
+          return (
+            <div key={i}>
+              <div className="flex justify-between text-xs mb-0.5">
+                <span className="text-zinc-300">{opt}</span>
+                <span className="font-mono text-zinc-500">{c}</span>
+              </div>
+              <div className="h-2 bg-reactor-bg rounded-full overflow-hidden">
+                <div className="h-full bg-rad-amber"
+                  style={{ width: (c / max) * 100 + '%', boxShadow: '0 0 8px rgba(251, 191, 36, 0.4)' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else if (q.type === 'scale') {
+    const nums = values.map(v => parseInt(v)).filter(n => !isNaN(n));
+    const avg = nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2) : '—';
+    const counts = {};
+    for (let i = 1; i <= q.scaleMax; i++) counts[i] = 0;
+    nums.forEach(n => { if (counts[n] !== undefined) counts[n]++; });
+    const max = Math.max(1, ...Object.values(counts));
+    summary = (
+      <div>
+        <div className="font-mono text-sm text-rad-green mb-3">
+          Mean: <span className="text-lg font-bold text-glow-green">{avg}</span>
+          <span className="text-zinc-500 text-xs ml-2">n={nums.length}</span>
+        </div>
+        <div className="flex items-end gap-1 h-20">
+          {Object.entries(counts).map(([k, c]) => (
+            <div key={k} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full bg-gradient-to-t from-rad-cyan to-rad-green rounded-t transition-all"
+                style={{ height: (c / max) * 100 + '%', minHeight: c ? '4px' : '0', boxShadow: '0 0 6px rgba(34, 211, 238, 0.3)' }} />
+              <div className="font-mono text-[10px] text-zinc-500">{k}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  } else if (q.type === 'file') {
+    summary = (
+      <div className="space-y-1 max-h-40 overflow-y-auto">
+        {values.slice(-8).reverse().map((v, i) => (
+          <div key={i} className="text-sm text-zinc-300 font-mono bg-reactor-bg rounded px-2 py-1 flex items-center gap-2">
+            <Icon name="file" size={12} className="text-rad-cyan flex-shrink-0" />
+            <span className="truncate">{v.name}</span>
+            <span className="text-zinc-600 text-xs ml-auto">{formatBytes(v.size)}</span>
+          </div>
+        ))}
+        {values.length === 0 && <div className="text-xs text-zinc-600 italic">No responses yet</div>}
+      </div>
+    );
+  } else {
+    summary = (
+      <div className="space-y-1 max-h-40 overflow-y-auto">
+        {values.slice(-8).reverse().map((v, i) => (
+          <div key={i} className="text-sm text-zinc-300 font-mono bg-reactor-bg rounded px-2 py-1 truncate">
+            {String(v)}
+          </div>
+        ))}
+        {values.length === 0 && <div className="text-xs text-zinc-600 italic">No responses yet</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-reactor-line bg-reactor-panel p-5">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="font-mono text-[11px] text-zinc-500 mt-1">{String(index + 1).padStart(2, '0')}</div>
+        <div className="flex-1">
+          <div className="text-zinc-100 font-medium">{q.title || <span className="text-zinc-600 italic">Untitled</span>}</div>
+          <div className="font-mono text-[10px] text-zinc-500 mt-0.5">
+            {values.length} / {responses.length} responses
+          </div>
+        </div>
+      </div>
+      <div className="pl-8">{summary}</div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  APP ROOT                                                                  */
+/* -------------------------------------------------------------------------- */
+function App() {
+  const hash = useHashRoute();
+  const route = parseRoute(hash);
+
+  const [state, setState] = useState(() => loadState());
+  const [config, setConfig] = useState(() => HARDCODED_CONFIG.token ? HARDCODED_CONFIG : loadConfig());  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(() => loadConfig() ? 'idle' : 'idle');
+  const [pulling, setPulling] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [dirtyForms, setDirtyForms] = useState(new Set());
+  const lastPushTime = useRef(0);
+  const lastPullTime = useRef(0);
+
+  useEffect(() => { saveState(state); }, [state]);
+  // Auto-pull from cloud on app open and when navigating home
+  useEffect(() => {
+    if (!config) return;
+    // Only auto-pull on initial load and when arriving at home
+    if (route.view === 'home') {
+      pullAll({ silent: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, route.view]);
+  useEffect(() => {
+  // Don't save hardcoded config to localStorage (it's already in the code)
+  if (HARDCODED_CONFIG.token) return;
+  if (config) saveConfig(config);
+  else localStorage.removeItem(CONFIG_KEY);
+}, [config]);
+
+  const forms = state.forms;
+  const responses = state.responses;
+
+  const createForm = () => {
+    const id = uid();
+    const f = {
+      id, title: '', description: '', questions: [],
+      createdAt: Date.now(),
+    };
+    setState(s => ({ ...s, forms: { ...s.forms, [id]: f } }));
+    if (config) setDirtyForms(d => new Set(d).add(id));
+    window.location.hash = '#/builder/' + id;
+  };
+
+  const updateForm = (f) => {
+    setState(s => ({ ...s, forms: { ...s.forms, [f.id]: f } }));
+    if (config) setDirtyForms(d => new Set(d).add(f.id));
+  };
+
+  const deleteForm = (id) => {
+    setState(s => {
+      const { [id]: _, ...rest } = s.forms;
+      const { [id]: __, ...restR } = s.responses;
+      return { forms: rest, responses: restR };
+    });
+    window.location.hash = '#/';
+  };
+
+  const submitResponse = async (formId, answers) => {
+    const r = { id: uid(), answers, submittedAt: Date.now() };
+    setState(s => ({
+      ...s,
+      responses: { ...s.responses, [formId]: [...(s.responses[formId] || []), r] },
+    }));
+    if (config) {
+      try {
+        setSyncStatus('syncing');
+        await GitHubSync.appendResponse(config, formId, r);
+        setSyncStatus('synced');
+      } catch (e) {
+        console.error('Sync failed', e);
+        setSyncStatus('error');
+      }
+    }
+  };
+
+  const pushAll = async () => {
+    if (!config) return;
+    setPushing(true);
+    setSyncStatus('syncing');
+    try {
+      for (const form of Object.values(forms)) {
+        const path = GitHubSync.filePath(config, form.id);
+        let sha = null;
+        try {
+          const existing = await GitHubSync.getFile(config, path);
+          if (existing) sha = existing.sha;
+        } catch {}
+        await GitHubSync.saveForm(config, form, responses[form.id] || [], sha);
+      }
+      setDirtyForms(new Set());
+      setSyncStatus('synced');
+      lastPushTime.current = Date.now();
+    } catch (e) {
+      console.error('Push failed', e);
+      setSyncStatus('error');
+      alert('Push failed: ' + e.message);
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const pullAll = async (options = {}) => {
+  if (!config) return;
+  const { silent = false } = options;
+
+  // Skip if we just pushed (avoid redundant fetch)
+  if (Date.now() - lastPushTime.current < 5000) return;
+  // Skip if pulled recently
+  if (Date.now() - lastPullTime.current < 3000) return;
+  // Skip if there are unsaved local changes (would overwrite them)
+  if (dirtyForms.size > 0 && silent) return;
+
+  setPulling(true);
+  if (!silent) setSyncStatus('syncing');
+  try {
+    const ids = await GitHubSync.listForms(config);
+    const newForms = {};
+    const newResponses = {};
+    for (const id of ids) {
+      const data = await GitHubSync.loadForm(config, id);
+      if (data && data.form) {
+        newForms[id] = data.form;
+        newResponses[id] = data.responses || [];
+      }
+    }
+    setState({ forms: newForms, responses: newResponses });
+    setDirtyForms(new Set());
+    setSyncStatus('synced');
+    lastPullTime.current = Date.now();
+  } catch (e) {
+    console.error('Pull failed', e);
+    setSyncStatus('error');
+    if (!silent) alert('Pull failed: ' + e.message);
+  } finally {
+    setPulling(false);
+  }
+};
+
+  const saveConfigHandler = (cfg) => {
+    setConfig(cfg);
+    setSyncStatus(cfg ? 'idle' : 'idle');
+  };
+
+  // Compute effective sync status
+  const effectiveStatus = useMemo(() => {
+    if (syncStatus === 'syncing') return 'syncing';
+    if (syncStatus === 'error') return 'error';
+    if (!config) return 'idle';
+    if (dirtyForms.size > 0) return 'dirty';
+    return 'synced';
+  }, [syncStatus, config, dirtyForms]);
+
+  return (
+    <div className="min-h-screen relative">
+      <AnimatedBackground />
+      <Header
+        onHome={() => window.location.hash = '#/'}
+        syncStatus={effectiveStatus}
+        config={config}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onPull={pullAll}
+        onPush={pushAll}
+        pulling={pulling}
+        pushing={pushing}
+      />
+
+      <main className="relative z-10">
+        {route.view === 'home' && (
+          <Home
+            forms={forms}
+            responses={responses}
+            onCreate={createForm}
+            onOpen={(id) => window.location.hash = '#/builder/' + id}
+            onDelete={deleteForm}
+            config={config}
+            onPullAll={pullAll}
+          />
+        )}
+
+        {route.view === 'builder' && (() => {
+          const f = forms[route.id];
+          if (!f) return <NotFound />;
+          return (
+            <FormBuilder
+              form={f}
+              onChange={updateForm}
+              onSave={() => {
+                setDirtyForms(d => {
+                  const n = new Set(d);
+                  n.delete(f.id);
+                  return n;
+                });
+                window.location.hash = '#/';
+              }}
+              syncStatus={effectiveStatus}
+              onPush={pushAll}
+            />
+          );
+        })()}
+
+        {route.view === 'fill' && (() => {
+          const f = forms[route.id];
+          if (!f) return <NotFound />;
+          return (
+            <FormFiller
+              form={f}
+              responses={responses}
+              onSubmit={(answers) => submitResponse(f.id, answers)}
+              config={config}
+            />
+          );
+        })()}
+
+        {route.view === 'responses' && (() => {
+          const f = forms[route.id];
+          if (!f) return <NotFound />;
+          return <ResponsesView form={f} responses={responses} />;
+        })()}
+      </main>
+
+      <footer className="relative z-10 mt-16 border-t border-reactor-line py-6 text-center font-mono text-[11px] text-zinc-600">
+        NUCLEAR FORMS · REACTION LABORATORY · v2.0 · {new Date().getFullYear()}
+      </footer>
+
+      {settingsOpen && (
+        <SettingsModal
+          config={config}
+          onSave={saveConfigHandler}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div className="max-w-xl mx-auto px-6 py-20 text-center">
+      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-rad-amber mb-4 trefoil-spin">
+        <RadiationTrefoil size={36} className="text-rad-amber" />
+      </div>
+      <h2 className="text-2xl font-bold text-zinc-100 mb-2">Containment breach</h2>
+      <p className="text-zinc-400 mb-6">This reaction could not be located in the reactor log.</p>
+      <GeigerButton variant="primary" onClick={() => window.location.hash = '#/'}>
+        Return to reactor
+      </GeigerButton>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
