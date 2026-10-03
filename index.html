@@ -1056,7 +1056,7 @@ function Home({ forms, responses, onCreate, onOpen, onDelete, config, onPullAll 
   const pullAll = async () => {
     if (!config) return;
     setPulling(true);
-    try { await onPullAll(); }
+    try { await onPullAll({ silent: false }); }
     finally { setPulling(false); }
   };
 
@@ -2259,8 +2259,19 @@ function App() {
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [dirtyForms, setDirtyForms] = useState(new Set());
+  const lastPushTime = useRef(0);
+  const lastPullTime = useRef(0);
 
   useEffect(() => { saveState(state); }, [state]);
+  // Auto-pull from cloud on app open and when navigating home
+  useEffect(() => {
+    if (!config) return;
+    // Only auto-pull on initial load and when arriving at home
+    if (route.view === 'home') {
+      pullAll({ silent: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, route.view]);
   useEffect(() => {
     if (config) saveConfig(config);
     else localStorage.removeItem(CONFIG_KEY);
@@ -2328,6 +2339,7 @@ function App() {
       }
       setDirtyForms(new Set());
       setSyncStatus('synced');
+      lastPushTime.current = Date.now();
     } catch (e) {
       console.error('Push failed', e);
       setSyncStatus('error');
@@ -2337,32 +2349,42 @@ function App() {
     }
   };
 
-  const pullAll = async () => {
-    if (!config) return;
-    setPulling(true);
-    setSyncStatus('syncing');
-    try {
-      const ids = await GitHubSync.listForms(config);
-      const newForms = {};
-      const newResponses = {};
-      for (const id of ids) {
-        const data = await GitHubSync.loadForm(config, id);
-        if (data && data.form) {
-          newForms[id] = data.form;
-          newResponses[id] = data.responses || [];
-        }
+  const pullAll = async (options = {}) => {
+  if (!config) return;
+  const { silent = false } = options;
+
+  // Skip if we just pushed (avoid redundant fetch)
+  if (Date.now() - lastPushTime.current < 5000) return;
+  // Skip if pulled recently
+  if (Date.now() - lastPullTime.current < 3000) return;
+  // Skip if there are unsaved local changes (would overwrite them)
+  if (dirtyForms.size > 0 && silent) return;
+
+  setPulling(true);
+  if (!silent) setSyncStatus('syncing');
+  try {
+    const ids = await GitHubSync.listForms(config);
+    const newForms = {};
+    const newResponses = {};
+    for (const id of ids) {
+      const data = await GitHubSync.loadForm(config, id);
+      if (data && data.form) {
+        newForms[id] = data.form;
+        newResponses[id] = data.responses || [];
       }
-      setState({ forms: newForms, responses: newResponses });
-      setDirtyForms(new Set());
-      setSyncStatus('synced');
-    } catch (e) {
-      console.error('Pull failed', e);
-      setSyncStatus('error');
-      alert('Pull failed: ' + e.message);
-    } finally {
-      setPulling(false);
     }
-  };
+    setState({ forms: newForms, responses: newResponses });
+    setDirtyForms(new Set());
+    setSyncStatus('synced');
+    lastPullTime.current = Date.now();
+  } catch (e) {
+    console.error('Pull failed', e);
+    setSyncStatus('error');
+    if (!silent) alert('Pull failed: ' + e.message);
+  } finally {
+    setPulling(false);
+  }
+};
 
   const saveConfigHandler = (cfg) => {
     setConfig(cfg);
